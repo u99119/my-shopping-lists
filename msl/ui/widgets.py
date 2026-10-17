@@ -146,7 +146,7 @@ class PriorityPicker(MDBoxLayout):
         self.value = int(value)
         self._buttons: dict[int, MDRaisedButton] = {}
         for p in Priority:
-            btn = MDRaisedButton(text=p.label, font_size="12sp", radius=[dp(24)] * 4,
+            btn = MDRaisedButton(text=p.label, font_size="12sp", rounded_button=True,
                                  on_release=lambda _b, p=int(p): self.select(p))
             self._buttons[int(p)] = btn
             self.add_widget(btn)
