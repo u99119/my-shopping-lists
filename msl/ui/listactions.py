@@ -93,22 +93,39 @@ class ListActions:
         self.app.repo.set_item_status(item.id, status)
         self.refresh()
 
+    def toggle_bought(self, item: Item) -> None:
+        self.set_status(item, Status.PENDING if item.status is Status.BOUGHT else Status.BOUGHT)
+
+    def toggle_not_available(self, item: Item) -> None:
+        self.set_status(item, Status.PENDING if item.status is Status.NOT_AVAILABLE
+                        else Status.NOT_AVAILABLE)
+
+    # ------------------------------------------------------------ remove
+    def delete_item(self, item: Item) -> None:
+        confirm("Delete item", f"Delete '{item.name}'?",
+                lambda: self._apply(lambda: self.app.repo.delete_item(item.id)))
+
+    def remove_category(self, cv: CategoryView) -> None:
+        lc = cv.category
+        confirm("Remove category", f"Remove '{lc.name}' and its items from this list?",
+                lambda: self._apply(lambda: self.app.repo.remove_list_category(lc.id)), "Remove")
+
+    def remove_subcategory(self, sv: SubcategoryView) -> None:
+        ls = sv.subcategory
+        confirm("Remove sub-category", f"Remove '{ls.name}' and its items?",
+                lambda: self._apply(lambda: self.app.repo.remove_list_subcategory(ls.id)),
+                "Remove")
+
     # ------------------------------------------------------------- menus
     def item_menu(self, caller: Any, item: Item) -> None:
-        entries = [
+        menu(caller, [
             ("Mark pending" if item.status is Status.BOUGHT else "Mark bought",
-             lambda: self.set_status(
-                 item, Status.PENDING if item.status is Status.BOUGHT else Status.BOUGHT)),
+             lambda: self.toggle_bought(item)),
             ("Mark available" if item.status is Status.NOT_AVAILABLE else "Not available",
-             lambda: self.set_status(
-                 item, Status.PENDING if item.status is Status.NOT_AVAILABLE
-                 else Status.NOT_AVAILABLE)),
+             lambda: self.toggle_not_available(item)),
             ("Edit", lambda: self.edit_item(item)),
-            ("Delete", lambda: confirm("Delete item", f"Delete '{item.name}'?",
-                                       lambda: self._apply(
-                                           lambda: self.app.repo.delete_item(item.id)))),
-        ]
-        menu(caller, entries)
+            ("Delete", lambda: self.delete_item(item)),
+        ])
 
     def category_menu(self, caller: Any, cv: CategoryView) -> None:
         lc, repo = cv.category, self.app.repo
@@ -117,9 +134,7 @@ class ListActions:
             ("Add sub-category", lambda: self.add_subcategory(cv)),
             ("Set priority", lambda: choose("Priority", PRIORITY_OPTIONS, lambda p: self._apply(
                 lambda: repo.set_list_category_priority(lc.id, p)))),
-            ("Remove from list", lambda: confirm(
-                "Remove category", f"Remove '{lc.name}' and its items from this list?",
-                lambda: self._apply(lambda: repo.remove_list_category(lc.id)), "Remove")),
+            ("Remove from list", lambda: self.remove_category(cv)),
         ])
 
     def sub_menu(self, caller: Any, sv: SubcategoryView) -> None:
@@ -128,7 +143,5 @@ class ListActions:
             ("Add item", lambda: self.add_item(ls.list_category_id, ls.id)),
             ("Set priority", lambda: choose("Priority", PRIORITY_OPTIONS, lambda p: self._apply(
                 lambda: repo.set_list_subcategory_priority(ls.id, p)))),
-            ("Remove from category", lambda: confirm(
-                "Remove sub-category", f"Remove '{ls.name}' and its items?",
-                lambda: self._apply(lambda: repo.remove_list_subcategory(ls.id)), "Remove")),
+            ("Remove from category", lambda: self.remove_subcategory(sv)),
         ])

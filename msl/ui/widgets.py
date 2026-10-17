@@ -12,7 +12,7 @@ from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDFlatButton, MDRaisedButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.label import MDLabel
-from kivymd.uix.list import OneLineListItem
+from kivymd.uix.list import OneLineAvatarListItem
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.snackbar import MDSnackbar
 from kivymd.uix.textfield import MDTextField
@@ -41,6 +41,17 @@ class Row(ButtonBehavior, MDBoxLayout):
 
 def label(text: str, **kwargs: Any) -> MDLabel:
     return MDLabel(text=text, markup=True, valign="center", **kwargs)
+
+
+class TextButton(ButtonBehavior, MDLabel):
+    """A compact tappable text such as ``+I`` (fixed width, so rows stay narrow)."""
+
+    def __init__(self, text: str, on_tap: Callable[[], None], width: float = 34,
+                 color: str = "00796b", **kwargs: Any) -> None:
+        super().__init__(text=f"[b][color={color}]{text}[/color][/b]", markup=True,
+                         halign="center", valign="center", size_hint=(None, 1),
+                         width=dp(width), **kwargs)
+        self.bind(on_release=lambda *_: on_tap())
 
 
 def toast(message: str) -> None:
@@ -97,7 +108,8 @@ def choose(title: str, options: Sequence[tuple[str, Any]], on_pick: Callable[[An
 
     dialog = MDDialog(
         title=title, type="simple",
-        items=[OneLineListItem(text=text, on_release=(lambda _w, v=value: pick(v)))
+        # MDDialog "simple" needs items that own a ``_left_container`` (avatar list items).
+        items=[OneLineAvatarListItem(text=text, on_release=(lambda _w, v=value: pick(v)))
                for text, value in options],
     )
     dialog.open()

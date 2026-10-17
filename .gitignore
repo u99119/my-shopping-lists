@@ -8,4 +8,5 @@ bin/
 *.aab
 *.db
 *.log
+test-logs/
 .DS_Store
