@@ -7,7 +7,10 @@ from typing import Any, Callable, Optional, Sequence
 
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.graphics import Color, Ellipse, Line, Rectangle
 from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.widget import Widget
+from kivy.utils import get_color_from_hex
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDFlatButton, MDRaisedButton
 from kivymd.uix.dialog import MDDialog
@@ -19,12 +22,41 @@ from kivymd.uix.textfield import MDTextField
 
 from ..core.models import Priority
 
-PRIORITY_COLOR = {1: "e53935", 2: "fb8c00", 3: "43a047"}  # red, orange, green
+PRIORITY_COLOR = {1: "0d47a1", 2: "64b5f6", 3: "9e9e9e"}  # dark blue, light blue, grey
 GREY = "9e9e9e"
+
+# Hierarchy bullets: very dark green hexagon > medium green square > hollow circle.
+BULLET_COLOR = {"category": "0b3d0b", "subcategory": "2e7d32", "item": "2e7d32"}
+BULLET_SIZE = {"category": 16, "subcategory": 12, "item": 9}
 
 
 def dot(priority: int) -> str:
     return f"[color={PRIORITY_COLOR[int(priority)]}]●[/color]"
+
+
+class Bullet(Widget):
+    """Shape marking the row level: filled hexagon (category), filled square
+    (sub-category) or hollow circle (item). Drawn on the canvas, so it needs no font."""
+
+    def __init__(self, kind: str, **kwargs: Any) -> None:
+        super().__init__(size_hint=(None, None), size=(dp(20), dp(20)),
+                         pos_hint={"center_y": 0.5}, **kwargs)
+        self.kind = kind
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_a: Any) -> None:
+        d = dp(BULLET_SIZE[self.kind])
+        x, y = self.center_x - d / 2, self.center_y - d / 2
+        self.canvas.clear()
+        with self.canvas:
+            Color(*get_color_from_hex(BULLET_COLOR[self.kind]))
+            if self.kind == "category":
+                Ellipse(pos=(x, y), size=(d, d), segments=6)
+            elif self.kind == "subcategory":
+                Rectangle(pos=(x, y), size=(d, d))
+            else:
+                Line(circle=(self.center_x, self.center_y, d / 2 - dp(0.75)), width=dp(1.5))
 
 
 class Row(ButtonBehavior, MDBoxLayout):
@@ -40,18 +72,8 @@ class Row(ButtonBehavior, MDBoxLayout):
 
 
 def label(text: str, **kwargs: Any) -> MDLabel:
+    kwargs.setdefault("line_height", 0.95)  # tighter spacing between the lines of a row
     return MDLabel(text=text, markup=True, valign="center", **kwargs)
-
-
-class TextButton(ButtonBehavior, MDLabel):
-    """A compact tappable text such as ``+I`` (fixed width, so rows stay narrow)."""
-
-    def __init__(self, text: str, on_tap: Callable[[], None], width: float = 34,
-                 color: str = "00796b", **kwargs: Any) -> None:
-        super().__init__(text=f"[b][color={color}]{text}[/color][/b]", markup=True,
-                         halign="center", valign="center", size_hint=(None, 1),
-                         width=dp(width), **kwargs)
-        self.bind(on_release=lambda *_: on_tap())
 
 
 def toast(message: str) -> None:
@@ -124,7 +146,7 @@ class PriorityPicker(MDBoxLayout):
         self.value = int(value)
         self._buttons: dict[int, MDRaisedButton] = {}
         for p in Priority:
-            btn = MDRaisedButton(text=f"{int(p)} {p.label}", font_size="12sp",
+            btn = MDRaisedButton(text=p.label, font_size="12sp", radius=[dp(24)] * 4,
                                  on_release=lambda _b, p=int(p): self.select(p))
             self._buttons[int(p)] = btn
             self.add_widget(btn)
@@ -133,7 +155,8 @@ class PriorityPicker(MDBoxLayout):
     def select(self, value: int) -> None:
         self.value = value
         for p, btn in self._buttons.items():
-            btn.md_bg_color = (0.0, 0.5, 0.5, 1) if p == value else (0.6, 0.6, 0.6, 1)
+            btn.md_bg_color = get_color_from_hex(PRIORITY_COLOR[p])
+            btn.opacity = 1 if p == value else 0.4  # selected one is solid, others faded
 
 
 @dataclass
