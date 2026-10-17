@@ -105,7 +105,7 @@ class SettingsScreen(MDScreen):
         rates = self.app.rates.all()
         options = [(f"{code}  ·  ₹{rate:g}", code) for code, rate in sorted(rates.items())
                    if code != "INR"]
-        options.append(("➕ Add / edit another currency…", None))
+        options.append(("+ Add / edit another currency...", None))
 
         def picked(code: Optional[str]) -> None:
             fields = [Field("code", "Currency code", value=code or "")]

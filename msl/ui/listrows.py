@@ -11,7 +11,7 @@ from kivymd.uix.button import MDIconButton
 from ..core.currency import format_money
 from ..core.models import Item, Status
 from ..core.viewmodel import CategoryView, SubcategoryView, Totals
-from .widgets import GREY, Bullet, Row, dot, label
+from .widgets import GREY, Bullet, PriorityDot, Row, label
 
 HEADER_BG = (0.88, 0.95, 0.95, 1)
 SUB_BG = (0.95, 0.97, 0.97, 1)
@@ -59,8 +59,9 @@ def category_header(screen, cv: CategoryView, expanded: bool) -> Row:
                         icon_size="20sp", pos_hint={"center_y": 0.5}, disabled=True)
     row.add_widget(icon)
     row.add_widget(Bullet("category"))
+    row.add_widget(PriorityDot(lc.priority))
     row.add_widget(label(
-        f"{dot(lc.priority)} [b]{escape_markup(lc.name)}[/b]\n"
+        f"[b]{escape_markup(lc.name)}[/b]\n"
         f"[size=12sp][color={GREY}]{counts(cv.totals, screen.currency)}[/color][/size]"))
     if screen.edit_mode:
         # plus inside a circle = add item (items are circles); plus inside a square = add sub-category
@@ -75,8 +76,9 @@ def subcategory_header(screen, sv: SubcategoryView) -> Row:
     ls = sv.subcategory
     row = Row(height=38, md_bg_color=SUB_BG, padding=(dp(40), 0, 0, 0))
     row.add_widget(Bullet("subcategory"))
+    row.add_widget(PriorityDot(ls.priority))
     row.add_widget(label(
-        f"{dot(ls.priority)} [b]{escape_markup(ls.name)}[/b]  "
+        f"[b]{escape_markup(ls.name)}[/b]  "
         f"[size=12sp][color={GREY}]{counts(sv.totals, screen.currency)}[/color][/size]"))
     if screen.edit_mode:
         row.add_widget(_quick("plus-circle-outline",
@@ -93,7 +95,7 @@ def item_text(item: Item, subtitle: Optional[str] = None) -> str:
     elif item.status is Status.NOT_AVAILABLE:
         text = f"[color={GREY}]{name}  (not available)[/color]"
     else:
-        text = f"{dot(item.priority)} {name}"
+        text = name
     if subtitle:
         text += f"\n[size=12sp][color={GREY}]{escape_markup(subtitle)}[/color][/size]"
     return text
@@ -103,6 +105,8 @@ def item_row(screen, item: Item, subtitle: Optional[str] = None, indent: int = 2
     row = Row(on_tap=lambda: screen.edit_item(item) if screen.edit_mode else None,
               height=46 if subtitle else 38, padding=(dp(indent), 0, 0, 0))
     row.add_widget(Bullet("item"))
+    done = item.status is not Status.PENDING  # bought / not available: dot goes grey
+    row.add_widget(PriorityDot(item.priority, GREY if done else None))
     row.add_widget(label(item_text(item, subtitle)))
     if item.cost is not None:
         row.add_widget(label(format_money(item.cost, screen.currency), halign="right",

@@ -97,7 +97,7 @@ class ListScreen(ListActions, MDScreen):
         full = self.edit_mode or lc.id in self.expanded
         self.body.add_widget(category_header(self, cv, full))
         if cv.totals.total == 0:
-            self.body.add_widget(note("No items yet"))
+            pass  # empty category: nothing to show, don't waste a row
         elif not full:
             if not cv.collapsed_rows:
                 self.body.add_widget(note("All done"))
@@ -112,8 +112,6 @@ class ListScreen(ListActions, MDScreen):
             self.body.add_widget(subcategory_header(self, sv))
             for item in sv.items:
                 self.body.add_widget(item_row(self, item, indent=48))
-            if not sv.items and self.edit_mode:
-                self.body.add_widget(note("No items"))
 
     # ---------------------------------------------------------- list actions
     def list_menu(self, caller: Any) -> None:

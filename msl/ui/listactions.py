@@ -31,7 +31,7 @@ class ListActions:
         used = {lc.category_id for lc in repo.list_categories(self.list_id)}
         options: list[tuple[str, Any]] = [
             (c.name, c.id) for c in repo.list_catalog_categories() if c.id not in used]
-        options.append(("➕ New category…", None))
+        options.append(("+ New category...", None))
 
         def picked(category_id: Any) -> None:
             fields = [Field("priority", "Priority", "priority", 1)]
@@ -48,26 +48,14 @@ class ListActions:
 
     def add_subcategory(self, cv: CategoryView) -> None:
         repo, lc = self.app.repo, cv.category
-        used = {s.subcategory.subcategory_id for s in cv.subcategories}
-        options: list[tuple[str, Any]] = [
-            (s.name, s.id) for s in repo.list_catalog_subcategories(lc.category_id)
-            if s.id not in used]
-        options.append(("➕ New sub-category…", None))
 
-        def picked(sub_id: Any) -> None:
-            fields = [Field("priority", "Priority", "priority", 1)]
-            if sub_id is None:
-                fields.insert(0, Field("name", "Sub-category name"))
+        def save(v: dict) -> None:
+            # reuses the catalog sub-category if one with this name already exists
+            sid = repo.get_or_create_catalog_subcategory(lc.category_id, v["name"]).id
+            self._apply(lambda: repo.add_list_subcategory(lc.id, sid, v["priority"]))
 
-            def save(v: dict) -> None:
-                sid = sub_id or repo.get_or_create_catalog_subcategory(
-                    lc.category_id, v["name"]).id
-                self._apply(lambda: repo.add_list_subcategory(lc.id, sid, v["priority"]))
-
-            form("Add sub-category" if sub_id is None else "Sub-category priority",
-                 fields, save, "Add")
-
-        choose("Add sub-category", options, picked)
+        form("Add sub-category", [Field("name", "Sub-category name"),
+                                  Field("priority", "Priority", "priority", 1)], save, "Add")
 
     def add_item(self, list_category_id: str, list_subcategory_id: str | None = None) -> None:
         def save(v: dict) -> None:

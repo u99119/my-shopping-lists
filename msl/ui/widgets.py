@@ -30,8 +30,23 @@ BULLET_COLOR = {"category": "0b3d0b", "subcategory": "2e7d32", "item": "2e7d32"}
 BULLET_SIZE = {"category": 16, "subcategory": 12, "item": 9}
 
 
-def dot(priority: int) -> str:
-    return f"[color={PRIORITY_COLOR[int(priority)]}]●[/color]"
+class PriorityDot(Widget):
+    """Small filled circle coloured by priority (dark blue / light blue / grey).
+    Drawn on the canvas because the default font has no '●' glyph on Android."""
+
+    def __init__(self, priority: int, color: Optional[str] = None, **kwargs: Any) -> None:
+        super().__init__(size_hint=(None, None), size=(dp(12), dp(20)),
+                         pos_hint={"center_y": 0.5}, **kwargs)
+        self.hex = color or PRIORITY_COLOR[int(priority)]
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_a: Any) -> None:
+        d = dp(10)
+        self.canvas.clear()
+        with self.canvas:
+            Color(*get_color_from_hex(self.hex))
+            Ellipse(pos=(self.center_x - d / 2, self.center_y - d / 2), size=(d, d))
 
 
 class Bullet(Widget):
