@@ -1,0 +1,6 @@
+# Runtime (desktop run + tests). On Android these are pulled in by buildozer.spec instead.
+kivy==2.3.1
+kivymd==1.2.0
+
+# Development
+pytest>=8,<9
