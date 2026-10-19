@@ -20,10 +20,14 @@ from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.snackbar import MDSnackbar
 from kivymd.uix.textfield import MDTextField
 
+from .. import services
 from ..core.models import Priority
 
 PRIORITY_COLOR = {1: "0d47a1", 2: "64b5f6", 3: "9e9e9e"}  # dark blue, light blue, grey
+# Text colour on a priority button: white on the dark blue one, black on the two light ones.
+PRIORITY_TEXT_COLOR = {1: (1, 1, 1, 1), 2: (0, 0, 0, 1), 3: (0, 0, 0, 1)}
 GREY = "9e9e9e"
+DARK_TEXT = (0.05, 0.05, 0.05, 1)  # near-black text for dialogs (default is a washed-out grey)
 
 # Hierarchy bullets: very dark green hexagon > medium green square > hollow circle.
 BULLET_COLOR = {"category": "0b3d0b", "subcategory": "2e7d32", "item": "2e7d32"}
@@ -93,7 +97,7 @@ def label(text: str, **kwargs: Any) -> MDLabel:
 
 def toast(message: str) -> None:
     MDSnackbar(MDLabel(text=message, theme_text_color="Custom",
-                       text_color=(1, 1, 1, 1))).open()
+                       text_color=(1, 1, 1, 1)), duration=2.5).open()
 
 
 def menu(caller, entries: Sequence[tuple[str, Callable[[], None]]]) -> MDDropdownMenu:
@@ -113,9 +117,34 @@ def menu(caller, entries: Sequence[tuple[str, Callable[[], None]]]) -> MDDropdow
     return dropdown
 
 
-def _dialog(title: str, content=None, buttons=(), **kwargs: Any) -> MDDialog:
-    dialog = MDDialog(title=title, buttons=list(buttons), **(
-        {"type": "custom", "content_cls": content} if content is not None else {}), **kwargs)
+def _tidy(dialog: MDDialog) -> MDDialog:
+    """Darker text and tighter vertical padding than the KivyMD defaults."""
+    dialog.ids.container.padding = (dp(24), dp(16), dp(8), dp(4))
+    dialog.ids.title.theme_text_color = "Custom"
+    dialog.ids.title.text_color = DARK_TEXT
+    dialog.ids.title.line_height = 0.95
+    dialog.ids.text.text_color = DARK_TEXT
+    dialog.ids.text.line_height = 0.95
+    return dialog
+
+
+def _dialog(title: str, content=None, buttons=(), pin_top: bool = False,
+            **kwargs: Any) -> MDDialog:
+    dialog = _tidy(MDDialog(title=title, buttons=list(buttons), **(
+        {"type": "custom", "content_cls": content} if content is not None else {}), **kwargs))
+    if pin_top:
+        # Put the dialog just under the status bar instead of centring it, so the keyboard
+        # can't cover it. ModalView re-centres itself via ``_align_center`` (looked up when the
+        # dialog opens), so replace that on this instance *before* ``open()``.
+        insets = services.system_bar_insets()
+        gap = (insets[1] if insets else 0) + dp(8)
+
+        def align_top(*_args: Any) -> None:
+            if dialog._is_open:
+                dialog.center_x = dialog._window.center[0]
+                dialog.top = dialog._window.height - gap
+
+        dialog._align_center = align_top  # type: ignore[method-assign]
     dialog.open()
     return dialog
 
@@ -127,11 +156,11 @@ def confirm(title: str, text: str, on_yes: Callable[[], None], yes_text: str = "
         dialog.dismiss()
         on_yes()
 
-    dialog = MDDialog(
+    dialog = _tidy(MDDialog(
         title=title, text=text,
         buttons=[MDFlatButton(text="Cancel", on_release=lambda *_: dialog.dismiss()),
                  MDRaisedButton(text=yes_text, on_release=yes)],
-    )
+    ))
     dialog.open()
 
 
@@ -143,12 +172,12 @@ def choose(title: str, options: Sequence[tuple[str, Any]], on_pick: Callable[[An
         dialog.dismiss()
         Clock.schedule_once(lambda _dt: on_pick(value), 0.05)
 
-    dialog = MDDialog(
+    dialog = _tidy(MDDialog(
         title=title, type="simple",
         # MDDialog "simple" needs items that own a ``_left_container`` (avatar list items).
         items=[OneLineAvatarListItem(text=text, on_release=(lambda _w, v=value: pick(v)))
                for text, value in options],
-    )
+    ))
     dialog.open()
 
 
@@ -171,6 +200,8 @@ class PriorityPicker(MDBoxLayout):
         self.value = value
         for p, btn in self._buttons.items():
             btn.md_bg_color = get_color_from_hex(PRIORITY_COLOR[p])
+            btn.theme_text_color = "Custom"
+            btn.text_color = PRIORITY_TEXT_COLOR[p]
             btn.opacity = 1 if p == value else 0.4  # selected one is solid, others faded
 
 
@@ -185,9 +216,9 @@ class Field:
 def form(title: str, fields: Sequence[Field], on_submit: Callable[[dict[str, Any]], None],
          submit_text: str = "Save") -> None:
     """Dialog with ``fields``. ``on_submit(values)`` may raise ValueError to show a message."""
-    content = MDBoxLayout(orientation="vertical", spacing=dp(12), size_hint_y=None,
-                          height=dp(72 * sum(1 for f in fields if f.kind != "priority")
-                                    + 60 * sum(1 for f in fields if f.kind == "priority")))
+    content = MDBoxLayout(orientation="vertical", spacing=dp(6), size_hint_y=None,
+                          height=dp(64 * sum(1 for f in fields if f.kind != "priority")
+                                    + 52 * sum(1 for f in fields if f.kind == "priority")))
     widgets: dict[str, Any] = {}
     for f in fields:
         if f.kind == "priority":
@@ -196,6 +227,9 @@ def form(title: str, fields: Sequence[Field], on_submit: Callable[[dict[str, Any
             w = MDTextField(hint_text=f.label, text="" if f.value is None else str(f.value),
                             input_filter="float" if f.kind == "number" else None,
                             mode="rectangle", write_tab=False)
+            w.text_color_normal = w.text_color_focus = DARK_TEXT
+            w.hint_text_color_normal = (0.25, 0.25, 0.25, 1)
+            w.line_color_normal = (0.25, 0.25, 0.25, 1)
         widgets[f.key] = w
         content.add_widget(w)
     dialog: MDDialog
@@ -212,7 +246,7 @@ def form(title: str, fields: Sequence[Field], on_submit: Callable[[dict[str, Any
 
     dialog = _dialog(title, content, [
         MDFlatButton(text="Cancel", on_release=lambda *_: dialog.dismiss()),
-        MDRaisedButton(text=submit_text, on_release=submit)])
+        MDRaisedButton(text=submit_text, on_release=submit)], pin_top=True)
     first = next((w for w in widgets.values() if isinstance(w, MDTextField)), None)
     if first is not None:
         Clock.schedule_once(lambda _dt: setattr(first, "focus", True), 0.3)

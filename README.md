@@ -8,12 +8,12 @@ Free, offline Android shopping-list app written in Python (Kivy + KivyMD). Side-
 - Edit mode and a collapsed view mode (top-priority pending items only), with totals.
 - Currency: base INR; other currencies convert using stored, editable rates (works offline).
 - Share a list as readable text (WhatsApp, email, ...).
-- Export all data to a JSON file, share it to another phone, and import it there. Import merges: newer change wins, nothing is deleted. Importing a duplicate list resets item statuses to pending.
+- Export all data to a JSON file, share it to another phone, and import it there. Import merges: records match by id (catalog and list/category pairs also by name); the newer change wins, including item status; nothing is deleted. Lists and items match by id only, so a same-named list created separately on another phone is imported as a second list. (Only the "copy list" action resets item statuses to pending.)
 - Optional app lock using the Android device lock (PIN / pattern / biometric).
 - All data is stored locally in SQLite.
 
 ## Requirements
-- Android 16 (API 36) or newer.
+- Android 15 (API 35) or newer; built against Android 16 (API 36).
 - Dev machine: Python 3.11, JDK 17 (only for building the APK).
 
 ## Quick start (desktop)

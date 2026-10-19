@@ -43,25 +43,39 @@ def _start_for_result(intent, request: int, callback: Callable) -> None:
     _activity().startActivityForResult(intent, request)
 
 
+# --- system bars ---------------------------------------------------------------------------
+
+
+def system_bar_insets() -> Optional[tuple[int, int, int, int]]:
+    """Pixels covered by the status bar, navigation bar and cutout: (left, top, right, bottom).
+
+    Desktop: zeros. Android: ``None`` while the window is not attached yet (try again later).
+    """
+    if not IS_ANDROID:
+        return 0, 0, 0, 0
+    from jnius import autoclass
+
+    insets = _activity().getWindow().getDecorView().getRootWindowInsets()
+    if insets is None:
+        return None
+    kind = autoclass("android.view.WindowInsets$Type")
+    box = insets.getInsets(kind.systemBars() | kind.displayCutout())
+    return box.left, box.top, box.right, box.bottom
+
+
 # --- sharing -------------------------------------------------------------------------------
 
 
 def share_text(text: str, subject: str = "") -> str:
-    """Open the Android share sheet (WhatsApp, email, ...). Desktop: copy to clipboard."""
-    if IS_ANDROID:
-        from jnius import autoclass
+    """Copy ``text`` to the clipboard and return a confirmation message.
 
-        Intent = autoclass("android.content.Intent")
-        intent = Intent(Intent.ACTION_SEND)
-        intent.setType("text/plain")
-        intent.putExtra(Intent.EXTRA_SUBJECT, subject)
-        intent.putExtra(Intent.EXTRA_TEXT, text)
-        _activity().startActivity(Intent.createChooser(intent, "Share list"))
-        return ""
+    The Android share sheet is deliberately not used: it sends the app to the background and the
+    app was closed when the user came back. The user pastes the copied text into WhatsApp etc.
+    """
     from kivy.core.clipboard import Clipboard
 
     Clipboard.copy(text)
-    return "Copied to clipboard"
+    return "List copied to clipboard"
 
 
 # --- export / import files -----------------------------------------------------------------

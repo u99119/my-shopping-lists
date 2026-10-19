@@ -14,9 +14,11 @@ requirements = python3,kivy==2.3.1,kivymd==1.2.0,pyjnius,android,materialyoucolo
 orientation = portrait
 fullscreen = 0
 
-# Android 16 (API 36) and newer only. No permissions needed: sharing and files use system pickers.
+# Targets Android 16 (API 36). minapi is 35 because NDK r28c (the version python-for-android
+# pins) ships libraries only up to API 35, and Buildozer uses minapi as the NDK API level.
+# No permissions needed: sharing and files use system pickers.
 android.api = 36
-android.minapi = 36
+android.minapi = 35
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.permissions =
