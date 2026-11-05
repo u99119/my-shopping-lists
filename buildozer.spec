@@ -8,9 +8,10 @@ source.include_patterns = msl/*,msl/core/*,msl/ui/*,msl/cal/*
 source.exclude_dirs = tests, .venv, .buildozer, bin, .pytest_cache
 version = 1.0.0
 
-# kivymd 1.2.0 needs these at runtime on Android. Google* + requests/urllib3/certifi/charset-normalizer/idna/
-# httplib2/oauthlib/requests-oauthlib/cachetools/pyasn1/pyasn1-modules/rsa/uritemplate/six support MY CAL (Phase 2b).
-requirements = python3,kivy==2.3.1,kivymd==1.2.0,pyjnius,android,materialyoucolor,exceptiongroup,asyncgui,asynckivy,pillow,sqlite3,google-auth,google-auth-oauthlib,google-api-python-client,httplib2,oauthlib,requests-oauthlib,requests,urllib3,certifi,charset-normalizer,idna,cachetools,pyasn1,pyasn1-modules,rsa,uritemplate,six
+# kivymd 1.2.0 needs these at runtime on Android. MY CAL (Phase 2b) uses google-auth +
+# google-auth-oauthlib for OAuth, then hits Calendar REST directly via requests. We avoid
+# google-api-python-client because it pulls protobuf, which has no Android wheel on PyPI.
+requirements = python3,kivy==2.3.1,kivymd==1.2.0,pyjnius,android,materialyoucolor,exceptiongroup,asyncgui,asynckivy,pillow,sqlite3,google-auth,google-auth-oauthlib,oauthlib,requests-oauthlib,requests,urllib3,certifi,charset-normalizer,idna,cachetools,pyasn1,pyasn1-modules,rsa,six
 
 orientation = portrait
 fullscreen = 0
