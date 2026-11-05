@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# gcal-push: thin wrapper that activates the project venv and runs the CLI.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$HERE/.venv/bin/activate" ]; then
+  # shellcheck disable=SC1091
+  source "$HERE/.venv/bin/activate"
+fi
+exec python -m msl.cal.cli "$@"
