@@ -1,4 +1,4 @@
-"""Local config for MY CAL. Plain JSON at ~/.msl-cal/config.json.
+"""Local config for MY CAL. Plain JSON in platform-aware dir (see storage.py).
 
 Not a secret: calendar ID, phrases, defaults, client_secret.json path.
 OAuth tokens live in the OS keyring (see auth.py).
@@ -7,17 +7,18 @@ OAuth tokens live in the OS keyring (see auth.py).
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
+
+from . import storage
 
 MAX_PHRASES = 12
 DEFAULT_DURATION_MIN = 0      # 0-duration event (reminder-like)
 DEFAULT_POPUP_OFFSET_MIN = 0  # notification at event time
 DEFAULT_X_HOURS = 3
 
-CONFIG_DIR_ENV = "MSL_CAL_HOME"
+CONFIG_DIR_ENV = storage.CONFIG_DIR_ENV  # re-exported for test backwards compat
 
 
 @dataclass
@@ -49,14 +50,11 @@ class Config:
 
 
 def config_dir() -> Path:
-    override = os.environ.get(CONFIG_DIR_ENV)
-    if override:
-        return Path(override).expanduser()
-    return Path.home() / ".msl-cal"
+    return storage.get_config_dir()
 
 
 def config_path() -> Path:
-    return config_dir() / "config.json"
+    return storage.get_config_path()
 
 
 def load() -> Config:

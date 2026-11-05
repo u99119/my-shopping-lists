@@ -14,6 +14,7 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.toolbar import MDTopAppBar
 from kivy.utils import escape_markup
 
+from ..cal import event_service as cal_svc
 from ..core.currency import format_money
 from ..core.models import ShoppingList
 from ..core.viewmodel import list_summary
@@ -37,8 +38,14 @@ class HomeScreen(MDScreen):
         stack.add_widget(MDFloatingActionButton(
             icon="plus", pos_hint={"right": 0.95, "y": 0.04},
             on_release=lambda *_: self.new_list()))
+        stack.add_widget(MDFloatingActionButton(
+            icon="calendar", pos_hint={"right": 0.95, "y": 0.16},
+            on_release=lambda *_: self._open_cal()))
         root.add_widget(stack)
         self.add_widget(root)
+
+    def _open_cal(self) -> None:
+        self.app.open_screen("mycal" if cal_svc.is_configured() else "cal_settings")
 
     @property
     def app(self) -> Any:  # type: ignore[override]

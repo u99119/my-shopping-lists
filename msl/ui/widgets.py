@@ -100,6 +100,24 @@ def toast(message: str) -> None:
                        text_color=(1, 1, 1, 1)), duration=2.5).open()
 
 
+def toast_action(message: str, action_text: str, on_action: Callable[[], None],
+                 duration: float = 5.0) -> None:
+    """Snackbar with a text action (e.g. Undo). Dismisses on action or timeout."""
+    bar: MDSnackbar
+
+    def _do(*_a: Any) -> None:
+        bar.dismiss()
+        on_action()
+
+    bar = MDSnackbar(
+        MDLabel(text=message, theme_text_color="Custom", text_color=(1, 1, 1, 1)),
+        MDFlatButton(text=action_text, theme_text_color="Custom",
+                     text_color=(1, 1, 1, 1), on_release=_do),
+        duration=duration,
+    )
+    bar.open()
+
+
 def menu(caller, entries: Sequence[tuple[str, Callable[[], None]]]) -> MDDropdownMenu:
     """Open a dropdown under ``caller``; each entry is ``(text, callback)``."""
     dropdown: MDDropdownMenu

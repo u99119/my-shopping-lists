@@ -18,6 +18,9 @@ from .core.repository import Repository
 from .core.seed import seed_catalog
 from .core.sharetext import format_list_text
 from .core.viewmodel import build_list_view
+from .ui.cal_pushoptions import CalPushOptionsScreen
+from .ui.cal_screen import CalScreen
+from .ui.cal_settings import CalSettingsScreen
 from .ui.catalogscreen import CatalogScreen
 from .ui.homescreen import HomeScreen
 from .ui.listscreen import ListScreen
@@ -48,7 +51,8 @@ class ShoppingListsApp(MDApp):
 
         self.manager = ScreenManager(transition=NoTransition())
         for screen in (HomeScreen(), ListScreen(), CatalogScreen(), SettingsScreen(),
-                       LockScreen()):
+                       LockScreen(), CalScreen(), CalPushOptionsScreen(),
+                       CalSettingsScreen()):
             self.manager.add_widget(screen)
         self.manager.current = "lock" if self.lock_enabled() else "home"
         Window.bind(on_keyboard=self._on_key)
@@ -138,6 +142,11 @@ class ShoppingListsApp(MDApp):
             return False  # let Android close the app
         if current == "catalog":
             self.manager.get_screen("catalog").on_back()
+        elif current == "cal_push":
+            self.open_screen("mycal")
+        elif current == "cal_settings":
+            from .cal import event_service as cal_svc
+            self.open_screen("mycal" if cal_svc.is_configured() else "home")
         else:
             self.go_home()
         return True

@@ -122,20 +122,27 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 - [ ] **User validation**: run `gcal-push auth` → `gcal-push test` → confirm event appears on B's phone
 - [ ] **User validation**: push a real phrase and confirm notification on B
 
-### Phase 2 — In-app button
-- Add calendar FAB above + FAB on main screen
-- MY CAL screen (phrase grid, ⚡ + 🕐 per row)
-- MY CAL Settings (account, calendar, phrases editor)
-- Push Options screen (9 choices)
-- Reuse `msl/cal/` module from Phase 1
-- Switch OAuth flow to Android-compatible variant
-- Add Google libs to `buildozer.spec`
+### Phase 2a — Desktop Kivy UI ✅ (this iteration)
+- [x] `msl/cal/storage.py` — platform-aware config dir (env on desktop, `App.user_data_dir` on Android)
+- [x] `msl/cal/event_service.py` — thin orchestrator used by UI (hides auth/HTTP, typed errors)
+- [x] `msl/ui/widgets.py::toast_action` — snackbar with Undo button (5-sec window)
+- [x] `msl/ui/cal_screen.py` — MY CAL grid, ⚡ + 🕐 per row, dots menu for Edit/Delete, today thumbnail
+- [x] `msl/ui/cal_pushoptions.py` — Push Options with 4 time-rule rows + −/+ X-hrs row + 4 fixed hours
+- [x] `msl/ui/cal_settings.py` — Calendar ID / client_secret path / popup offset / test / re-auth / sign-out
+- [x] Calendar FAB wired on `homescreen.py` (above + FAB); opens MY CAL if configured, else Settings
+- [x] All screens registered in `app.py`; Android back-key routing for cal screens
+- [x] Tests: 90/90 passing (3 new storage + 12 new event_service tests)
 
-### Phase 3 — Polish
-- Undo toast after push (5-sec window to delete just-created event)
+### Phase 2b — Android ⏳
+- Switch OAuth flow to PKCE (custom tab / system browser)
+- Android Keystore via `pyjnius` for refresh-token storage
+- `buildozer.spec` — add `google-auth`, `google-auth-oauthlib`, `google-api-python-client`, `keyring`, deep-link intent filter
+- APK build + on-device validation
+
+### Phase 3 — Polish (deferred)
 - Offline queue (retry on reconnect)
-- In-app read-only today view at bottom of MY CAL
-- Long-press phrase = inline edit
+- Per-phrase duration override UI
+- Long-press behaviour (currently freed; candidate: reorder phrases)
 
 ## 11. Open / Deferred
 
@@ -148,4 +155,6 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 
 - `tests/test_cal_timing.py` — 12 tests; covers all 6 time functions + parse/format + edge rolls
 - `tests/test_cal_config.py` — 8 tests; roundtrip, max-12 limit, empty-text rejection, update, remove
-- Network paths (`auth.py`, `calendar_client.py`) not unit-tested here; validated by `gcal-push test` end-to-end.
+- `tests/test_cal_storage.py` — 3 tests; env override, `~` expansion, default fallback
+- `tests/test_cal_event_service.py` — 12 tests; is_configured, resolve_when branches, push validation + mocked create/undo, x_hours persistence, AuthRequired propagation
+- Network paths (`auth.py`, `calendar_client.py`) not unit-tested; validated by `gcal-push test` end-to-end.
