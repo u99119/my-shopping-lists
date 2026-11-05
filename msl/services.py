@@ -27,9 +27,13 @@ def _activity():
 
 
 def _on_result(request: int, result: int, intent) -> None:
+    # Android calls this on its UI thread; widgets and the SQLite connection belong to Kivy's.
+    from kivy.clock import Clock
+
     callback = _pending.pop(request, None)
     if callback:
-        callback(result == _RESULT_OK, intent)
+        ok = result == _RESULT_OK
+        Clock.schedule_once(lambda _dt: callback(ok, intent), 0)
 
 
 def _start_for_result(intent, request: int, callback: Callable) -> None:
@@ -96,7 +100,8 @@ def save_text_file(filename: str, text: str, on_done: Callable[[str], None]) -> 
     intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
     intent.addCategory(Intent.CATEGORY_OPENABLE)
     intent.setType("application/json")
-    intent.putExtra(Intent.EXTRA_TITLE, filename)
+    # A Python str matches the wrong putExtra overload; the picker then names the file "(invalid)".
+    intent.putExtra(Intent.EXTRA_TITLE, autoclass("java.lang.String")(filename))
 
     def finished(ok: bool, data) -> None:
         if not ok or data is None:
