@@ -58,9 +58,7 @@ class _CallbackApp:
         path = environ.get("PATH_INFO", "/")
         qs = environ.get("QUERY_STRING", "")
         params = urllib.parse.parse_qs(qs)
-        is_callback = "code" in params or "error" in params
-        print(f"[auth] http request path={path} callback={is_callback}", flush=True)
-        if not is_callback:
+        if "code" not in params and "error" not in params:
             start_response("404 Not Found", [("Content-Type", "text/plain")])
             return [b""]
         self.last_uri = f"http://{host}{path}?{qs}"
@@ -167,12 +165,9 @@ def _loopback_flow(client_secret_path: str) -> Credentials:
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         })
-        print(f"[auth] loopback server bound at {redirect_uri}", flush=True)
         if not services.open_url(auth_url):
             raise RuntimeError("Could not launch system browser for sign-in.")
-        print("[auth] waiting for OAuth redirect (timeout 300s)...", flush=True)
         cb.done.wait(300)
-        print(f"[auth] wait finished; last_uri={bool(cb.last_uri)}", flush=True)
     finally:
         server.shutdown()
         server.server_close()
@@ -272,16 +267,9 @@ def ensure_credentials_async(
         Clock.schedule_once(lambda _dt: on_done(creds, exc), 0)
 
     def worker() -> None:
-        print("[auth.worker] thread started", flush=True)
         try:
-            creds = ensure_credentials(client_secret_path)
-            print("[auth.worker] ensure_credentials returned OK", flush=True)
-            deliver(creds, None)
+            deliver(ensure_credentials(client_secret_path), None)
         except BaseException as exc:  # noqa: BLE001 - surface all to UI
-            import traceback
-            print(f"[auth.worker] exception: {exc!r}", flush=True)
-            traceback.print_exc()
             deliver(None, exc)
 
-    print("[auth] spawning worker thread", flush=True)
     threading.Thread(target=worker, daemon=True).start()

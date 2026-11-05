@@ -82,15 +82,10 @@ def open_url(url: str) -> bool:
     Uri = autoclass("android.net.Uri")
     intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
     intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    print(f"[open_url] dispatching ACTION_VIEW: {url[:80]}...", flush=True)
     try:
         _activity().startActivity(intent)
-        print("[open_url] startActivity returned OK", flush=True)
         return True
-    except Exception as exc:  # noqa: BLE001 - surface to caller
-        import traceback
-        print(f"[open_url] startActivity FAILED: {exc!r}", flush=True)
-        traceback.print_exc()
+    except Exception:  # noqa: BLE001 - no browser available
         return False
 
 

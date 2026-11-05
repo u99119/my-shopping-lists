@@ -133,18 +133,14 @@ class CalSettingsScreen(MDScreen):
         toast("Connection OK.")
 
     def _reauth(self) -> None:
-        print("[reauth] button tapped", flush=True)
         cfg = cfgmod.load()
         if not cfg.client_secret_path:
             toast("Set client_secret.json path first.")
             return
-        print(f"[reauth] client_secret_path={cfg.client_secret_path}", flush=True)
         auth.clear_credentials()
         toast("Opening browser…")
-        print("[reauth] calling ensure_credentials_async", flush=True)
         auth.ensure_credentials_async(
             cfg.client_secret_path, lambda c, e: self._after_reauth(c, e))
-        print("[reauth] ensure_credentials_async returned (async)", flush=True)
 
     def _after_reauth(self, _creds: Any, exc: Optional[BaseException]) -> None:
         if exc is not None:
