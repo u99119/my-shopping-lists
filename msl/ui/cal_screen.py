@@ -95,13 +95,16 @@ class CalScreen(MDScreen):
 
     # ------------------------------------------------------------ interactions
     def _quick_push(self, idx: int, option: str) -> None:
-        try:
-            res = svc.push(phrase_index=idx, text=None, option=option)
-        except svc.ConfigError:
+        toast("Pushing…")
+        svc.push_async(phrase_index=idx, text=None, option=option,
+                       on_done=self._after_push)
+
+    def _after_push(self, res: Any, exc: Any) -> None:
+        if isinstance(exc, svc.ConfigError):
             toast("Open Settings and set the calendar first.")
             self.app.open_screen("cal_settings")
             return
-        except Exception as exc:  # noqa: BLE001
+        if exc is not None:
             toast(f"Push failed: {exc}")
             return
         when = res.when.strftime("%a %H:%M")
@@ -109,11 +112,8 @@ class CalScreen(MDScreen):
                      lambda eid=res.event_id: self._undo(eid))
 
     def _undo(self, event_id: str) -> None:
-        try:
-            svc.undo(event_id)
-            toast("Undone.")
-        except Exception as exc:  # noqa: BLE001
-            toast(f"Undo failed: {exc}")
+        svc.undo_async(event_id, lambda _r, exc: (
+            toast("Undone.") if exc is None else toast(f"Undo failed: {exc}")))
 
     def _open_push_options(self, idx: int) -> None:
         screen = self.app.manager.get_screen("cal_push")
@@ -154,12 +154,14 @@ class CalScreen(MDScreen):
         self.refresh()
 
     def _show_today(self) -> None:
-        try:
-            items = svc.today_events()
-        except svc.ConfigError:
+        toast("Loading…")
+        svc.today_events_async(self._after_today)
+
+    def _after_today(self, items: Any, exc: Any) -> None:
+        if isinstance(exc, svc.ConfigError):
             toast("Set the calendar in Settings first.")
             return
-        except Exception as exc:  # noqa: BLE001
+        if exc is not None:
             toast(f"Could not fetch: {exc}")
             return
         if not items:

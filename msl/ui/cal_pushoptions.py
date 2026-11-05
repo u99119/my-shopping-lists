@@ -125,13 +125,16 @@ class CalPushOptionsScreen(MDScreen):
         if self._phrase_idx is None:
             toast("No phrase selected.")
             return
-        try:
-            res = svc.push(phrase_index=self._phrase_idx, text=None, option=option, **extra)
-        except svc.ConfigError:
+        toast("Pushing…")
+        svc.push_async(phrase_index=self._phrase_idx, text=None, option=option,
+                       on_done=self._after_push, **extra)
+
+    def _after_push(self, res: Any, exc: Any) -> None:
+        if isinstance(exc, svc.ConfigError):
             toast("Open Settings and set the calendar first.")
             self.app.open_screen("cal_settings")
             return
-        except Exception as exc:  # noqa: BLE001
+        if exc is not None:
             toast(f"Push failed: {exc}")
             return
         when = res.when.strftime("%a %H:%M")
@@ -140,8 +143,5 @@ class CalPushOptionsScreen(MDScreen):
         self.app.open_screen("mycal")
 
     def _undo(self, event_id: str) -> None:
-        try:
-            svc.undo(event_id)
-            toast("Undone.")
-        except Exception as exc:  # noqa: BLE001
-            toast(f"Undo failed: {exc}")
+        svc.undo_async(event_id, lambda _r, exc: (
+            toast("Undone.") if exc is None else toast(f"Undo failed: {exc}")))

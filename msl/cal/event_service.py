@@ -5,9 +5,10 @@ UI layer (msl/ui/cal_*) never imports auth/calendar_client/Google libs directly.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from . import auth, calendar_client as cc, config as cfgmod, timing
 
@@ -113,3 +114,76 @@ def today_events() -> list[dict]:
 def is_configured() -> bool:
     cfg = cfgmod.load()
     return bool(cfg.calendar_id and cfg.client_secret_path)
+
+
+# ----------------------------------------------------------------- async UI helpers
+def run_async(fn: Callable[[], Any],
+              on_done: Callable[[Any, Optional[BaseException]], None]) -> None:
+    """Run ``fn`` on a background thread; deliver (result, exc) on Kivy main thread."""
+    from kivy.clock import Clock
+
+    def deliver(result: Any, exc: Optional[BaseException]) -> None:
+        Clock.schedule_once(lambda _dt: on_done(result, exc), 0)
+
+    def worker() -> None:
+        try:
+            deliver(fn(), None)
+        except BaseException as exc:  # noqa: BLE001 - surface all to UI
+            deliver(None, exc)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def push_async(phrase_index: Optional[int], text: Optional[str], option: str,
+               on_done: Callable[[Optional[PushResult], Optional[BaseException]], None],
+               **kwargs: Any) -> None:
+    """Auth-if-needed then push, all off the UI thread."""
+    cfg = cfgmod.load()
+    if not cfg.calendar_id:
+        on_done(None, ConfigError("calendar_id not set"))
+        return
+
+    def after_auth(_creds: Any, exc: Optional[BaseException]) -> None:
+        if exc is not None:
+            on_done(None, AuthRequiredError(str(exc)))
+            return
+        run_async(lambda: push(phrase_index, text, option, **kwargs), on_done)
+
+    auth.ensure_credentials_async(cfg.client_secret_path, after_auth)
+
+
+def undo_async(event_id: str,
+               on_done: Callable[[Any, Optional[BaseException]], None]) -> None:
+    run_async(lambda: undo(event_id), on_done)
+
+
+def test_connection_async(
+        on_done: Callable[[Any, Optional[BaseException]], None]) -> None:
+    cfg = cfgmod.load()
+    if not cfg.calendar_id:
+        on_done(None, ConfigError("calendar_id not set"))
+        return
+
+    def after_auth(_creds: Any, exc: Optional[BaseException]) -> None:
+        if exc is not None:
+            on_done(None, AuthRequiredError(str(exc)))
+            return
+        run_async(test_connection, on_done)
+
+    auth.ensure_credentials_async(cfg.client_secret_path, after_auth)
+
+
+def today_events_async(
+        on_done: Callable[[Optional[list], Optional[BaseException]], None]) -> None:
+    cfg = cfgmod.load()
+    if not cfg.calendar_id:
+        on_done(None, ConfigError("calendar_id not set"))
+        return
+
+    def after_auth(_creds: Any, exc: Optional[BaseException]) -> None:
+        if exc is not None:
+            on_done(None, AuthRequiredError(str(exc)))
+            return
+        run_async(today_events, on_done)
+
+    auth.ensure_credentials_async(cfg.client_secret_path, after_auth)

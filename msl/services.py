@@ -63,6 +63,28 @@ def system_bar_insets() -> Optional[tuple[int, int, int, int]]:
     return box.left, box.top, box.right, box.bottom
 
 
+# --- open URL in system browser ------------------------------------------------------------
+
+
+def open_url(url: str) -> bool:
+    """Open ``url`` in the OS browser. Returns True on launch (not on success)."""
+    if not IS_ANDROID:
+        import webbrowser
+
+        return bool(webbrowser.open(url, new=1, autoraise=True))
+    from jnius import autoclass
+
+    Intent = autoclass("android.content.Intent")
+    Uri = autoclass("android.net.Uri")
+    intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try:
+        _activity().startActivity(intent)
+        return True
+    except Exception:  # noqa: BLE001 - no browser available
+        return False
+
+
 # --- sharing -------------------------------------------------------------------------------
 
 

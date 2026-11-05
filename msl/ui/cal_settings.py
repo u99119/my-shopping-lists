@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from kivy.metrics import dp
 from kivy.uix.scrollview import ScrollView
@@ -120,12 +120,14 @@ class CalSettingsScreen(MDScreen):
         self.refresh()
 
     def _test(self) -> None:
-        try:
-            svc.test_connection()
-        except svc.ConfigError:
+        toast("Checking…")
+        svc.test_connection_async(self._after_test)
+
+    def _after_test(self, _r: Any, exc: Optional[BaseException]) -> None:
+        if isinstance(exc, svc.ConfigError):
             toast("Set calendar ID first.")
             return
-        except Exception as exc:  # noqa: BLE001
+        if exc is not None:
             toast(f"Test failed: {exc}")
             return
         toast("Connection OK.")
@@ -135,10 +137,13 @@ class CalSettingsScreen(MDScreen):
         if not cfg.client_secret_path:
             toast("Set client_secret.json path first.")
             return
-        try:
-            auth.clear_credentials()
-            auth.run_oauth_flow(cfg.client_secret_path)
-        except Exception as exc:  # noqa: BLE001
+        auth.clear_credentials()
+        toast("Opening browser…")
+        auth.ensure_credentials_async(
+            cfg.client_secret_path, lambda c, e: self._after_reauth(c, e))
+
+    def _after_reauth(self, _creds: Any, exc: Optional[BaseException]) -> None:
+        if exc is not None:
             toast(f"Auth failed: {exc}")
             return
         toast("Signed in.")
