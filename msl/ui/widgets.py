@@ -12,7 +12,7 @@ from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.widget import Widget
 from kivy.utils import get_color_from_hex
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.button import MDFlatButton, MDRaisedButton
+from kivymd.uix.button import MDFlatButton, MDIconButton, MDRaisedButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.label import MDLabel
 from kivymd.uix.list import OneLineAvatarListItem
@@ -78,16 +78,56 @@ class Bullet(Widget):
                 Line(circle=(self.center_x, self.center_y, d / 2 - dp(0.75)), width=dp(1.5))
 
 
+LONG_PRESS_S = 0.5
+
+
 class Row(ButtonBehavior, MDBoxLayout):
-    """A fixed-height horizontal row that can be tapped."""
+    """A fixed-height horizontal row that can be tapped (and optionally long-pressed)."""
 
     def __init__(self, on_tap: Optional[Callable[[], None]] = None, height: float = 56,
-                 **kwargs: Any) -> None:
+                 on_long_tap: Optional[Callable[[], None]] = None, **kwargs: Any) -> None:
         kwargs.setdefault("padding", (dp(12), 0, 0, 0))
         super().__init__(orientation="horizontal", size_hint_y=None, height=dp(height),
                          spacing=dp(4), **kwargs)
-        if on_tap:
-            self.bind(on_release=lambda *_: on_tap())
+        self._on_tap = on_tap
+        self._on_long_tap = on_long_tap
+        self._long_ev: Any = None
+        self._long_fired = False
+        if on_long_tap:
+            self.bind(on_press=self._start_long)
+        if on_tap or on_long_tap:
+            self.bind(on_release=self._released)
+
+    def _start_long(self, *_a: Any) -> None:
+        self._long_fired = False
+        self._cancel_long()
+        self._long_ev = Clock.schedule_once(self._fire_long, LONG_PRESS_S)
+
+    def _fire_long(self, _dt: float) -> None:
+        self._long_ev = None
+        if self.state == "down" and self._on_long_tap:
+            self._long_fired = True
+            self._on_long_tap()
+
+    def _cancel_long(self) -> None:
+        if self._long_ev is not None:
+            self._long_ev.cancel()
+            self._long_ev = None
+
+    def _released(self, *_a: Any) -> None:
+        self._cancel_long()
+        if self._long_fired:  # the long press already acted; don't also tap
+            self._long_fired = False
+            return
+        if self._on_tap:
+            self._on_tap()
+
+
+def compact_icon(icon: str, on_release: Callable[[Any], None]) -> MDIconButton:
+    """Icon button with a 36dp touch box instead of 48dp, for rows with several icons."""
+    btn = MDIconButton(icon=icon, pos_hint={"center_y": 0.5}, on_release=on_release)
+    btn._default_icon_pad = dp(12)  # read by MDIconButton.set_size (scheduled after init)
+    return btn
 
 
 def label(text: str, **kwargs: Any) -> MDLabel:
@@ -95,9 +135,15 @@ def label(text: str, **kwargs: Any) -> MDLabel:
     return MDLabel(text=text, markup=True, valign="center", **kwargs)
 
 
+def _snackbar_y() -> float:
+    """Snackbars attach to the window, so lift them above the navigation bar."""
+    insets = services.system_bar_insets()
+    return (insets[3] if insets else 0) + dp(8)
+
+
 def toast(message: str) -> None:
     MDSnackbar(MDLabel(text=message, theme_text_color="Custom",
-                       text_color=(1, 1, 1, 1)), duration=2.5).open()
+                       text_color=(1, 1, 1, 1)), duration=2.5, y=_snackbar_y()).open()
 
 
 def toast_action(message: str, action_text: str, on_action: Callable[[], None],
@@ -114,6 +160,7 @@ def toast_action(message: str, action_text: str, on_action: Callable[[], None],
         MDFlatButton(text=action_text, theme_text_color="Custom",
                      text_color=(1, 1, 1, 1), on_release=_do),
         duration=duration,
+        y=_snackbar_y(),
     )
     bar.open()
 
@@ -223,12 +270,63 @@ class PriorityPicker(MDBoxLayout):
             btn.opacity = 1 if p == value else 0.4  # selected one is solid, others faded
 
 
+class TimeStepper(MDBoxLayout):
+    """HH:MM picker: hour −/+ in 1 h steps, minute −/+ in 5 min steps (both wrap)."""
+
+    def __init__(self, caption: str, value: Any = "09:00", **kwargs: Any) -> None:
+        super().__init__(orientation="vertical", size_hint_y=None, height=dp(64), **kwargs)
+        try:
+            hh, mm = (int(x) for x in str(value).split(":"))
+        except ValueError:
+            hh, mm = 9, 0
+        self.hh, self.mm = hh % 24, mm % 60
+        self.add_widget(MDLabel(text=caption, font_style="Caption", size_hint_y=None,
+                                height=dp(16), theme_text_color="Custom",
+                                text_color=(0.25, 0.25, 0.25, 1)))
+        row = MDBoxLayout(orientation="horizontal", adaptive_width=True,
+                          pos_hint={"center_x": 0.5})
+        self._hh_label = self._group(row, self._step_hour)
+        row.add_widget(self._digits(":", width=12))
+        self._mm_label = self._group(row, self._step_minute)
+        self.add_widget(row)
+        self._show()
+
+    @property
+    def value(self) -> str:
+        return f"{self.hh:02d}:{self.mm:02d}"
+
+    def _digits(self, text: str, width: float = 40) -> MDLabel:
+        return MDLabel(text=text, halign="center", font_size="20sp", size_hint_x=None,
+                       width=dp(width), theme_text_color="Custom", text_color=DARK_TEXT)
+
+    def _group(self, row: MDBoxLayout, step: Callable[[int], None]) -> MDLabel:
+        digits = self._digits("")
+        row.add_widget(compact_icon("minus", lambda _w: step(-1)))
+        row.add_widget(digits)
+        row.add_widget(compact_icon("plus", lambda _w: step(1)))
+        return digits
+
+    def _step_hour(self, d: int) -> None:
+        self.hh = (self.hh + d) % 24
+        self._show()
+
+    def _step_minute(self, d: int) -> None:
+        # Snap to the 5-minute grid: 07 → + 10, − 05.
+        self.mm = (self.mm // 5 * 5 + 5) % 60 if d > 0 else ((self.mm + 4) // 5 * 5 - 5) % 60
+        self._show()
+
+    def _show(self) -> None:
+        self._hh_label.text = f"{self.hh:02d}"
+        self._mm_label.text = f"{self.mm:02d}"
+
+
 @dataclass
 class Field:
     key: str
     label: str
-    kind: str = "text"  # text | number | priority
+    kind: str = "text"  # text | number | priority | time
     value: Any = ""
+    suggest: bool = False  # text only: keyboard word completion + spellcheck
 
 
 def form(title: str, fields: Sequence[Field], on_submit: Callable[[dict[str, Any]], None],
@@ -241,10 +339,13 @@ def form(title: str, fields: Sequence[Field], on_submit: Callable[[dict[str, Any
     for f in fields:
         if f.kind == "priority":
             w: Any = PriorityPicker(int(f.value or 1))
+        elif f.kind == "time":
+            w = TimeStepper(f.label, f.value or "09:00")
         else:
+            extra = {"input_type": "text", "keyboard_suggestions": True} if f.suggest else {}
             w = MDTextField(hint_text=f.label, text="" if f.value is None else str(f.value),
                             input_filter="float" if f.kind == "number" else None,
-                            mode="rectangle", write_tab=False)
+                            mode="rectangle", write_tab=False, **extra)
             w.text_color_normal = w.text_color_focus = DARK_TEXT
             w.hint_text_color_normal = (0.25, 0.25, 0.25, 1)
             w.line_color_normal = (0.25, 0.25, 0.25, 1)
@@ -253,7 +354,7 @@ def form(title: str, fields: Sequence[Field], on_submit: Callable[[dict[str, Any
     dialog: MDDialog
 
     def submit(*_a: Any) -> None:
-        values = {k: (w.value if isinstance(w, PriorityPicker) else w.text)
+        values = {k: (w.value if isinstance(w, (PriorityPicker, TimeStepper)) else w.text)
                   for k, w in widgets.items()}
         try:
             on_submit(values)

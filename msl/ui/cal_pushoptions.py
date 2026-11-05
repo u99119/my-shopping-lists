@@ -18,6 +18,8 @@ from ..cal import config as cfgmod, event_service as svc, timing
 from .widgets import GREY, Row, label, toast, toast_action
 
 FIXED_HOURS = (10, 15, 18, 21)  # 10 AM, 3 PM, 6 PM, 9 PM
+PHRASE_BLUE = "1565c0"
+PREVIEW_PINK = "ff1493"  # deep pink
 
 
 class CalPushOptionsScreen(MDScreen):
@@ -27,10 +29,11 @@ class CalPushOptionsScreen(MDScreen):
         self._x_hours: int = cfgmod.DEFAULT_X_HOURS
         root = MDBoxLayout(orientation="vertical")
         root.add_widget(MDTopAppBar(
-            title="Push Options", elevation=2,
+            title="MY CAL (push options)", elevation=2,
             left_action_items=[["arrow-left", lambda _w: self.app.open_screen("mycal")]]))
         self.header = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                                  adaptive_height=True, padding=(dp(16), dp(8), dp(16), dp(8)))
+                                  adaptive_height=True, padding=(dp(16), dp(8), dp(16), dp(8)),
+                                  spacing=dp(4))
         self.body = MDBoxLayout(orientation="vertical", size_hint_y=None, adaptive_height=True)
         scroll = ScrollView()
         inner = MDBoxLayout(orientation="vertical", size_hint_y=None, adaptive_height=True)
@@ -58,10 +61,13 @@ class CalPushOptionsScreen(MDScreen):
             self.header.add_widget(label("[i]No phrase selected.[/i]"))
             return
         p = cfg.phrases[self._phrase_idx]
-        self.header.add_widget(label(f"[b]{escape_markup(p.text)}[/b]"))
         self.header.add_widget(label(
-            f"[size=12sp][color={GREY}]default "
-            f"{timing.format_hhmm(p.default_hh, p.default_mm)}[/color][/size]"))
+            f"[color={PHRASE_BLUE}][b]{escape_markup(p.text)}[/b][/color]",
+            font_style="H6", line_height=1.0, adaptive_height=True))
+        self.header.add_widget(label(
+            f"[color={GREY}]default "
+            f"{timing.format_hhmm(p.default_hh, p.default_mm)}[/color]",
+            font_style="Caption", line_height=1.0, adaptive_height=True))
 
         self._add_option("Push NOW (+5 min)", "now")
         self._add_option(f"Push at default ({timing.format_hhmm(p.default_hh, p.default_mm)})",
@@ -77,7 +83,7 @@ class CalPushOptionsScreen(MDScreen):
         preview = when.strftime("%a %H:%M") if when else "—"
         row = Row(on_tap=lambda o=option, e=extra: self._do(o, **e), height=56)
         row.add_widget(label(f"{escape_markup(text)}\n"
-                             f"[size=11sp][color={GREY}]{preview}[/color][/size]"))
+                             f"[size=13sp][color={PREVIEW_PINK}]{preview}[/color][/size]"))
         self.body.add_widget(row)
 
     def _x_hours_row(self) -> Row:
@@ -85,7 +91,7 @@ class CalPushOptionsScreen(MDScreen):
         preview = self._preview("x_hours", x_hours=self._x_hours)
         preview_str = preview.strftime("%a %H:%M") if preview else "—"
         txt = label(f"Push +{self._x_hours}h\n"
-                    f"[size=11sp][color={GREY}]{preview_str}[/color][/size]")
+                    f"[size=13sp][color={PREVIEW_PINK}]{preview_str}[/color][/size]")
         minus = MDIconButton(icon="minus", pos_hint={"center_y": 0.5},
                              on_release=lambda *_: self._bump_x(-1))
         plus = MDIconButton(icon="plus", pos_hint={"center_y": 0.5},

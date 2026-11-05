@@ -126,8 +126,8 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 - [x] `msl/cal/storage.py` — platform-aware config dir (env on desktop, `App.user_data_dir` on Android)
 - [x] `msl/cal/event_service.py` — thin orchestrator used by UI (hides auth/HTTP, typed errors)
 - [x] `msl/ui/widgets.py::toast_action` — snackbar with Undo button (5-sec window)
-- [x] `msl/ui/cal_screen.py` — MY CAL grid, ⚡ + 🕐 per row, dots menu for Edit/Delete, today thumbnail
-- [x] `msl/ui/cal_pushoptions.py` — Push Options with 4 time-rule rows + −/+ X-hrs row + 4 fixed hours
+- [x] `msl/ui/cal_screen.py` — MY CAL grid, ⚡ + 🕐 per row, dots menu for Edit/Delete, long-press → Edit, today thumbnail
+- [x] `msl/ui/cal_pushoptions.py` — "MY CAL (push options)" with 4 time-rule rows + −/+ X-hrs row + 4 fixed hours
 - [x] `msl/ui/cal_settings.py` — Calendar ID / client_secret path / popup offset / test / re-auth / sign-out
 - [x] Calendar FAB wired on `homescreen.py` (above + FAB); opens MY CAL if configured, else Settings
 - [x] All screens registered in `app.py`; Android back-key routing for cal screens
@@ -142,14 +142,12 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 ### Phase 3 — Polish (deferred)
 - Offline queue (retry on reconnect)
 - Per-phrase duration override UI
-- Long-press behaviour (currently freed; candidate: reorder phrases)
 
 ## 11. Open / Deferred
 
 - Android OAuth flow choice (custom tab vs system browser) — Phase 2
 - Should we move to Published OAuth to avoid 7-day token expiry? Deferred (verification is heavy for personal app)
 - Per-phrase duration override UI (CLI supports via config; UI pending Phase 2)
-- Long-press behaviour wiring (data model supports edit; UI pending Phase 2)
 
 ## 12. Test Coverage
 

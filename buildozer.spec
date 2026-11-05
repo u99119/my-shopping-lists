@@ -8,10 +8,12 @@ source.include_patterns = msl/*,msl/core/*,msl/ui/*,msl/cal/*
 source.exclude_dirs = tests, .venv, .buildozer, bin, .pytest_cache
 version = 1.0.0
 
-# kivymd 1.2.0 needs these at runtime on Android. MY CAL (Phase 2b) uses google-auth +
-# google-auth-oauthlib for OAuth, then hits Calendar REST directly via requests. We avoid
-# google-api-python-client because it pulls protobuf, which has no Android wheel on PyPI.
-requirements = python3,kivy==2.3.1,kivymd==1.2.0,pyjnius,android,materialyoucolor,exceptiongroup,asyncgui,asynckivy,pillow,sqlite3,google-auth,google-auth-oauthlib,oauthlib,requests-oauthlib,requests,urllib3,certifi,charset-normalizer,idna,cachetools,pyasn1,pyasn1-modules,rsa,six
+# kivymd 1.2.0 needs these at runtime on Android. MY CAL does OAuth2 + Calendar REST by
+# hand against the public endpoints using `requests`. google-auth / google-auth-oauthlib
+# are deliberately NOT included: they transitively require `cryptography`, whose native
+# extensions don't build cleanly on Android. google-api-python-client is also avoided
+# because it drags in protobuf, which has no Android wheel on PyPI.
+requirements = python3,kivy==2.3.1,kivymd==1.2.0,pyjnius,android,materialyoucolor,exceptiongroup,asyncgui,asynckivy,pillow,sqlite3,requests,urllib3,certifi,charset-normalizer,idna
 
 orientation = portrait
 fullscreen = 0
@@ -23,7 +25,9 @@ android.api = 36
 android.minapi = 35
 android.archs = arm64-v8a
 android.accept_sdk_license = True
-android.permissions = android.permission.INTERNET
+# QUERY_ALL_PACKAGES is needed so the OAuth flow can resolve a browser via
+# Intent(ACTION_VIEW, https://...) on API 30+ (strict package visibility).
+android.permissions = android.permission.INTERNET, android.permission.WRITE_EXTERNAL_STORAGE, android.permission.QUERY_ALL_PACKAGES
 
 [buildozer]
 log_level = 2

@@ -12,7 +12,8 @@ from typing import Optional
 from urllib.parse import quote
 
 import requests
-from google.oauth2.credentials import Credentials
+
+from ._credentials import Credentials
 
 _BASE = "https://www.googleapis.com/calendar/v3"
 _TIMEOUT = 30  # seconds
