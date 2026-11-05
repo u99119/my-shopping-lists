@@ -10,3 +10,4 @@ bin/
 *.log
 test-logs/
 .DS_Store
+client_secret*.json
