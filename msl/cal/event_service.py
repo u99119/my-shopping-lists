@@ -113,7 +113,7 @@ def today_events() -> list[dict]:
 
 def is_configured() -> bool:
     cfg = cfgmod.load()
-    return bool(cfg.calendar_id and cfg.client_secret_path)
+    return bool(cfg.calendar_id and (cfg.client_secret_path or auth.uses_android_client()))
 
 
 # ----------------------------------------------------------------- async UI helpers

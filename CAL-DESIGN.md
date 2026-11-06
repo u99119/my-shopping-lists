@@ -52,7 +52,7 @@ tests/
 |---|---|---|
 | OAuth refresh token | OS keyring (`msl-cal` / `google-oauth-token`) | Secret → OS-encrypted store |
 | calendar_id, phrases, defaults | `~/.msl-cal/config.json` plaintext | Non-secret user data |
-| client_secret_*.json | Wherever user keeps it; path recorded in config | Required only during OAuth |
+| client_secret_*.json | Wherever user keeps it; path recorded in config | Desktop/CLI only, during OAuth. Android uses the built-in Android client (no secret) |
 
 Overridable via env var `MSL_CAL_HOME` (used in tests).
 
@@ -133,11 +133,15 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 - [x] All screens registered in `app.py`; Android back-key routing for cal screens
 - [x] Tests: 90/90 passing (3 new storage + 12 new event_service tests)
 
-### Phase 2b — Android ⏳
-- Switch OAuth flow to PKCE (custom tab / system browser)
-- Android Keystore via `pyjnius` for refresh-token storage
-- `buildozer.spec` — add `google-auth`, `google-auth-oauthlib`, `google-api-python-client`, `keyring`, deep-link intent filter
-- APK build + on-device validation
+### Phase 2b — Android ✅
+- [x] Hand-rolled PKCE code grant + refresh via `requests` (google-auth dropped: it needs `cryptography`)
+- [x] Android Keystore via `pyjnius` for refresh-token storage
+- [x] Android sign-in: Android OAuth client (package + debug-key SHA-1, "custom URI scheme" enabled, no secret).
+  Google redirects to `org.u99119.myshoppinglists:/oauth2redirect`; `android_intent_filters.xml` routes it to
+  the running app (`services.listen_for_uri`). A 127.0.0.1 server cannot work on Android: background apps
+  get their incoming traffic dropped while the browser is in front.
+- [x] APK build + on-device validation
+- Release builds signed with another key need a second Android client with that key's SHA-1
 
 ### Phase 3 — Polish (deferred)
 - Offline queue (retry on reconnect)
@@ -145,7 +149,6 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 
 ## 11. Open / Deferred
 
-- Android OAuth flow choice (custom tab vs system browser) — Phase 2
 - Should we move to Published OAuth to avoid 7-day token expiry? Deferred (verification is heavy for personal app)
 - Per-phrase duration override UI (CLI supports via config; UI pending Phase 2)
 
@@ -154,5 +157,5 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 - `tests/test_cal_timing.py` — 12 tests; covers all 6 time functions + parse/format + edge rolls
 - `tests/test_cal_config.py` — 8 tests; roundtrip, max-12 limit, empty-text rejection, update, remove
 - `tests/test_cal_storage.py` — 3 tests; env override, `~` expansion, default fallback
-- `tests/test_cal_event_service.py` — 12 tests; is_configured, resolve_when branches, push validation + mocked create/undo, x_hours persistence, AuthRequired propagation
-- Network paths (`auth.py`, `calendar_client.py`) not unit-tested; validated by `gcal-push test` end-to-end.
+- `tests/test_cal_event_service.py` — 16 tests; is_configured (incl. Android without secret), resolve_when branches, push validation + mocked create/undo, x_hours persistence, AuthRequired propagation, Android sign-in (redirect scheme, no secret, state check), refresh without secret
+- Real network paths (`calendar_client.py`, token endpoint) not unit-tested; validated by `gcal-push test` and on-device sign-in.

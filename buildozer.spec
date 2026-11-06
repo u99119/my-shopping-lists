@@ -28,6 +28,8 @@ android.accept_sdk_license = True
 # QUERY_ALL_PACKAGES is needed so the OAuth flow can resolve a browser via
 # Intent(ACTION_VIEW, https://...) on API 30+ (strict package visibility).
 android.permissions = android.permission.INTERNET, android.permission.QUERY_ALL_PACKAGES
+# Google sign-in redirects to org.u99119.myshoppinglists:/oauth2redirect (msl/cal/auth.py).
+android.manifest.intent_filters = android_intent_filters.xml
 
 [buildozer]
 log_level = 2

@@ -98,3 +98,78 @@ def test_undo_calls_delete(seeded_cfg):
         svc.undo("evt-xyz")
     delete.assert_called_once()
     assert delete.call_args.args[2] == "evt-xyz"
+
+
+# ------------------------------------------------- Android sign-in (custom URI scheme)
+@pytest.fixture
+def android(monkeypatch):
+    monkeypatch.setattr(svc.auth.token_store, "_is_android", lambda: True)
+
+
+class _FakeServices:
+    """Stands in for msl.services: 'opening' the URL immediately delivers a redirect."""
+
+    def __init__(self, redirect_for):
+        self.redirect_for = redirect_for  # (prefix, state) -> uri or None
+        self.listeners = {}
+
+    def listen_for_uri(self, prefix, callback):
+        self.listeners[prefix] = callback
+        return lambda: self.listeners.pop(prefix, None)
+
+    def open_url(self, url):
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(url).query)
+        self.opened = q
+        uri = self.redirect_for(q["redirect_uri"][0], q["state"][0])
+        if uri:
+            self.listeners[q["redirect_uri"][0]](uri)
+        return True
+
+
+def _run_android_flow(monkeypatch, redirect_for):
+    import msl
+    fake = _FakeServices(redirect_for)
+    monkeypatch.setitem(__import__("sys").modules, "msl.services", fake)
+    monkeypatch.setattr(msl, "services", fake, raising=False)
+    monkeypatch.setattr(svc.auth, "load_credentials", lambda: None)
+    monkeypatch.setattr(svc.auth, "save_credentials", lambda _c: None)
+    resp = MagicMock()
+    resp.json.return_value = {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
+    with patch.object(svc.auth._requests, "post", return_value=resp) as post:
+        creds = svc.auth.ensure_credentials(None)
+    return fake, post, creds
+
+
+def test_is_configured_on_android_without_client_secret(tmp_home, android):
+    cfgmod.save(cfgmod.Config(calendar_id="cal@group.calendar.google.com"))
+    assert svc.is_configured() is True
+
+
+def test_android_sign_in_uses_redirect_scheme_and_no_secret(monkeypatch, android):
+    fake, post, creds = _run_android_flow(
+        monkeypatch, lambda prefix, state: f"{prefix}?state={state}&code=CODE123&scope=x")
+    assert fake.opened["client_id"] == [svc.auth.ANDROID_CLIENT_ID]
+    assert fake.opened["code_challenge_method"] == ["S256"]
+    data = post.call_args.kwargs["data"]
+    assert data["code"] == "CODE123"
+    assert data["redirect_uri"] == svc.auth.ANDROID_REDIRECT_URI
+    assert data["code_verifier"]
+    assert "client_secret" not in data
+    assert creds.token == "at" and creds.refresh_token == "rt" and creds.client_secret is None
+    assert fake.listeners == {}  # stopped listening
+
+
+def test_android_sign_in_rejects_wrong_state(monkeypatch, android):
+    with pytest.raises(RuntimeError, match="state mismatch"):
+        _run_android_flow(monkeypatch, lambda prefix, _s: f"{prefix}?state=forged&code=X")
+
+
+def test_refresh_without_client_secret_omits_it():
+    creds = svc.auth.Credentials(token="old", refresh_token="rt", client_id="cid")
+    resp = MagicMock()
+    resp.json.return_value = {"access_token": "new", "expires_in": 3600}
+    with patch.object(svc.auth._requests, "post", return_value=resp) as post:
+        svc.auth._refresh(creds)
+    assert "client_secret" not in post.call_args.kwargs["data"]
+    assert creds.token == "new"

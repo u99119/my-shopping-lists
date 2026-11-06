@@ -1,0 +1,8 @@
+<!-- Inserted into PythonActivity by buildozer (android.manifest.intent_filters).
+     Google OAuth redirects here after sign-in; see ANDROID_REDIRECT_URI in msl/cal/auth.py. -->
+<intent-filter>
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="org.u99119.myshoppinglists" />
+</intent-filter>

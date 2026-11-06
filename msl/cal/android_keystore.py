@@ -42,26 +42,34 @@ def _get_or_create_key():
     return gen.generateKey()
 
 
+def _key():
+    # Cast to the exact parameter type: a freshly generated key is typed SecretKey, and pyjnius
+    # then picks Cipher.init(int, Certificate) instead of Cipher.init(int, Key).
+    from jnius import cast
+
+    return cast("java.security.Key", _get_or_create_key())
+
+
 def encrypt(plaintext: bytes) -> tuple[bytes, bytes]:
     """Encrypt ``plaintext``; returns (iv, ciphertext). Both must be stored."""
     from jnius import autoclass
 
     Cipher = autoclass("javax.crypto.Cipher")
     cipher = Cipher.getInstance(TRANSFORMATION)
-    cipher.init(Cipher.ENCRYPT_MODE, _get_or_create_key())
+    cipher.init(Cipher.ENCRYPT_MODE, _key())
     iv = bytes(cipher.getIV())
     ct = bytes(cipher.doFinal(plaintext))
     return iv, ct
 
 
 def decrypt(iv: bytes, ciphertext: bytes) -> bytes:
-    from jnius import autoclass
+    from jnius import autoclass, cast
 
     Cipher = autoclass("javax.crypto.Cipher")
     GCMParameterSpec = autoclass("javax.crypto.spec.GCMParameterSpec")
     cipher = Cipher.getInstance(TRANSFORMATION)
-    cipher.init(Cipher.DECRYPT_MODE, _get_or_create_key(),
-                GCMParameterSpec(TAG_LENGTH_BITS, iv))
+    spec = cast("java.security.spec.AlgorithmParameterSpec", GCMParameterSpec(TAG_LENGTH_BITS, iv))
+    cipher.init(Cipher.DECRYPT_MODE, _key(), spec)
     return bytes(cipher.doFinal(ciphertext))
 
 

@@ -47,8 +47,11 @@ class CalSettingsScreen(MDScreen):
         cfg = cfgmod.load()
         self._field_row("Calendar ID", cfg.calendar_id or "(not set)",
                         lambda: self._edit_calendar_id(cfg))
-        self._field_row("client_secret.json", cfg.client_secret_path or "(not set)",
-                        lambda: self._edit_client_secret(cfg))
+        if auth.uses_android_client():
+            self._field_row("Sign-in client", "Built-in Android client (no file needed)", None)
+        else:
+            self._field_row("client_secret.json", cfg.client_secret_path or "(not set)",
+                            lambda: self._edit_client_secret(cfg))
         self._field_row("Account", cfg.account_email or "(unknown)", None)
         self._field_row("Default popup offset",
                         f"{cfg.popup_offset_min} min before",
@@ -134,7 +137,7 @@ class CalSettingsScreen(MDScreen):
 
     def _reauth(self) -> None:
         cfg = cfgmod.load()
-        if not cfg.client_secret_path:
+        if not cfg.client_secret_path and not auth.uses_android_client():
             toast("Set client_secret.json path first.")
             return
         auth.clear_credentials()

@@ -18,6 +18,8 @@ _REQ_SAVE, _REQ_OPEN, _REQ_LOCK = 7101, 7102, 7103
 _RESULT_OK = -1
 _pending: dict[int, Callable] = {}
 _bound = False
+_uri_listeners: dict[str, Callable[[str], None]] = {}
+_intent_bound = False
 
 
 def _activity():
@@ -45,6 +47,44 @@ def _start_for_result(intent, request: int, callback: Callable) -> None:
         _bound = True
     _pending[request] = callback
     _activity().startActivityForResult(intent, request)
+
+
+# --- incoming links ------------------------------------------------------------------------
+
+
+def _on_new_intent(intent) -> None:
+    data = intent.getDataString() if intent is not None else None
+    if not data:
+        return
+    for prefix, callback in list(_uri_listeners.items()):
+        if data.startswith(prefix):
+            callback(data)
+
+
+def bind_incoming_links() -> None:
+    """Start receiving links that open the running app. Call once from Kivy's thread:
+    pyjnius cannot load the app's own Java classes from a background thread."""
+    global _intent_bound
+    if IS_ANDROID and not _intent_bound:
+        from android import activity  # type: ignore[import-not-found]
+
+        activity.bind(on_new_intent=_on_new_intent)
+        _intent_bound = True
+
+
+def listen_for_uri(prefix: str, callback: Callable[[str], None]) -> Callable[[], None]:
+    """Call ``callback(uri)`` when the running app is opened with a link starting with ``prefix``.
+
+    Needs ``bind_incoming_links()`` to have run. Android delivers the link on its UI thread,
+    so ``callback`` must not touch widgets. Returns a function that stops listening.
+    """
+    _uri_listeners[prefix] = callback
+
+    def stop() -> None:
+        if _uri_listeners.get(prefix) is callback:
+            del _uri_listeners[prefix]
+
+    return stop
 
 
 # --- system bars ---------------------------------------------------------------------------

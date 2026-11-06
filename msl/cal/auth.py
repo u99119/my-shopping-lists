@@ -1,12 +1,14 @@
 """OAuth flow + token storage.
 
-Desktop (CLI, tests): ``ensure_credentials`` is synchronous, uses blocking
-``InstalledAppFlow``.  Kivy (desktop or Android): ``ensure_credentials_async``
-runs the loopback flow on a background thread and delivers credentials back on
-Kivy's main thread via ``Clock.schedule_once``.
+Desktop (CLI, tests): Desktop OAuth client from a client_secret JSON; the
+redirect comes back to a local 127.0.0.1 server. Android: built-in Android
+OAuth client (no secret); Google redirects to the app's custom URI scheme and
+Android hands that link to the running app. Android blocks network traffic to
+background apps, so a local server there never sees the redirect.
 
-On both platforms the browser is launched via ``services.open_url`` so the
-same code path works everywhere (webbrowser on desktop, Intent on Android).
+``ensure_credentials`` is synchronous; ``ensure_credentials_async`` runs it on
+a background thread and delivers on Kivy's main thread via ``Clock.schedule_once``.
+The browser is launched via ``services.open_url`` on both platforms.
 Token blobs are persisted through :mod:`.token_store` (OS keyring on desktop,
 Keystore-encrypted file on Android).
 """
@@ -37,6 +39,12 @@ _AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 _TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
+
+# Android OAuth client (package org.u99119.myshoppinglists + debug-key SHA-1,
+# "custom URI scheme" enabled). Android clients have no secret.
+ANDROID_CLIENT_ID = "989058260277-qfpj0dkbrkd2690o0ah04l1qegmuqebh.apps.googleusercontent.com"
+ANDROID_REDIRECT_URI = "org.u99119.myshoppinglists:/oauth2redirect"  # see android_intent_filters.xml
+_REDIRECT_WAIT_S = 300
 _SUCCESS_HTML = (b"<html><head><meta charset=utf-8></head><body style='font-family:"
                  b"sans-serif;padding:24px'><h3>Authentication complete.</h3>"
                  b"<p>You can close this tab and return to the app.</p></body></html>")
@@ -119,15 +127,96 @@ def _pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def _extract_code(redirect_uri: str) -> str:
+def _extract_code(redirect_uri: str, expected_state: Optional[str] = None) -> str:
     qs = urllib.parse.urlparse(redirect_uri).query
     params = urllib.parse.parse_qs(qs)
     if "error" in params:
         raise RuntimeError(f"OAuth error: {params['error'][0]}")
+    if expected_state is not None and (params.get("state") or [None])[0] != expected_state:
+        raise RuntimeError("OAuth callback state mismatch; please sign in again.")
     codes = params.get("code") or []
     if not codes:
         raise RuntimeError("OAuth callback had no 'code' parameter")
     return codes[0]
+
+
+def uses_android_client() -> bool:
+    """True on Android: the built-in Android client is used and no client_secret file is needed."""
+    return token_store._is_android()
+
+
+def _auth_url(client_id: str, redirect_uri: str, state: str, challenge: str) -> str:
+    return _AUTH_URI + "?" + urllib.parse.urlencode({
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    })
+
+
+def _exchange_code(code: str, client_id: str, client_secret: Optional[str],
+                   redirect_uri: str, verifier: str) -> Credentials:
+    """Swap the authorization code for tokens, store them and return the credentials."""
+    data = {
+        "code": code,
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+        "code_verifier": verifier,
+    }
+    if client_secret:
+        data["client_secret"] = client_secret
+    resp = _requests.post(_TOKEN_URI, data=data, timeout=20)
+    resp.raise_for_status()
+    body = resp.json()
+    expires_in = int(body.get("expires_in", 3600))
+    creds = Credentials(
+        token=body["access_token"],
+        refresh_token=body.get("refresh_token"),
+        token_uri=_TOKEN_URI,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=list(SCOPES),
+        expiry=datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in),
+    )
+    save_credentials(creds)
+    return creds
+
+
+def _android_flow() -> Credentials:
+    """Sign in with the Android client; Google redirects to ``ANDROID_REDIRECT_URI``.
+
+    Blocks the calling (worker) thread until Android delivers the redirect link
+    to the app, or ``_REDIRECT_WAIT_S`` passes.
+    """
+    from .. import services  # lazy: services imports kivy which pytest should avoid
+
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(16)
+    received: list[str] = []
+    done = threading.Event()
+
+    def on_uri(uri: str) -> None:
+        received.append(uri)
+        done.set()
+
+    stop = services.listen_for_uri(ANDROID_REDIRECT_URI, on_uri)
+    try:
+        url = _auth_url(ANDROID_CLIENT_ID, ANDROID_REDIRECT_URI, state, challenge)
+        if not services.open_url(url):
+            raise RuntimeError("Could not launch system browser for sign-in.")
+        done.wait(_REDIRECT_WAIT_S)
+    finally:
+        stop()
+    if not received:
+        raise RuntimeError("Sign-in timed out — the browser did not return to the app.")
+    code = _extract_code(received[0], expected_state=state)
+    return _exchange_code(code, ANDROID_CLIENT_ID, None, ANDROID_REDIRECT_URI, verifier)
 
 
 def _loopback_flow(client_secret_path: str) -> Credentials:
@@ -154,20 +243,9 @@ def _loopback_flow(client_secret_path: str) -> Credentials:
                      daemon=True).start()
     try:
         redirect_uri = f"http://127.0.0.1:{server.server_port}/"
-        auth_url = _AUTH_URI + "?" + urllib.parse.urlencode({
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "scope": " ".join(SCOPES),
-            "access_type": "offline",
-            "prompt": "consent",
-            "state": state,
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-        })
-        if not services.open_url(auth_url):
+        if not services.open_url(_auth_url(client_id, redirect_uri, state, challenge)):
             raise RuntimeError("Could not launch system browser for sign-in.")
-        cb.done.wait(300)
+        cb.done.wait(_REDIRECT_WAIT_S)
     finally:
         server.shutdown()
         server.server_close()
@@ -177,29 +255,8 @@ def _loopback_flow(client_secret_path: str) -> Credentials:
             "Sign-in timed out — the browser did not redirect back to the app. "
             "This usually means Chrome blocked the 127.0.0.1 redirect."
         )
-    code = _extract_code(cb.last_uri)
-    resp = _requests.post(_TOKEN_URI, data={
-        "code": code,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect_uri,
-        "grant_type": "authorization_code",
-        "code_verifier": verifier,
-    }, timeout=20)
-    resp.raise_for_status()
-    body = resp.json()
-    expires_in = int(body.get("expires_in", 3600))
-    creds = Credentials(
-        token=body["access_token"],
-        refresh_token=body.get("refresh_token"),
-        token_uri=_TOKEN_URI,
-        client_id=client_id,
-        client_secret=client_secret,
-        scopes=list(SCOPES),
-        expiry=datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in),
-    )
-    save_credentials(creds)
-    return creds
+    code = _extract_code(cb.last_uri, expected_state=state)
+    return _exchange_code(code, client_id, client_secret, redirect_uri, verifier)
 
 
 def run_oauth_flow(client_secret_path: str) -> Credentials:
@@ -214,16 +271,14 @@ def _refresh(creds: Credentials) -> None:
     Google's OAuth2 refresh is a single POST to the token endpoint; doing it by
     hand lets us skip the Request() import that drags in cryptography.
     """
-    resp = _requests.post(
-        creds.token_uri or "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "refresh_token": creds.refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=20,
-    )
+    data = {
+        "client_id": creds.client_id,
+        "refresh_token": creds.refresh_token,
+        "grant_type": "refresh_token",
+    }
+    if creds.client_secret:  # Android clients have none
+        data["client_secret"] = creds.client_secret
+    resp = _requests.post(creds.token_uri or _TOKEN_URI, data=data, timeout=20)
     resp.raise_for_status()
     data = resp.json()
     creds.token = data["access_token"]
@@ -243,6 +298,8 @@ def ensure_credentials(client_secret_path: Optional[str]) -> Credentials:
             return creds
         except Exception:
             pass  # refresh failed → fall through to re-auth
+    if uses_android_client():
+        return _android_flow()
     if not client_secret_path:
         raise RuntimeError(
             "Need to re-authenticate but client_secret_path is not configured. "
@@ -262,6 +319,7 @@ def ensure_credentials_async(
     immediately; the browser launch and server wait run on a background thread.
     """
     from kivy.clock import Clock
+    from kivy.logger import Logger
 
     def deliver(creds: Optional[Credentials], exc: Optional[BaseException]) -> None:
         Clock.schedule_once(lambda _dt: on_done(creds, exc), 0)
@@ -270,6 +328,7 @@ def ensure_credentials_async(
         try:
             deliver(ensure_credentials(client_secret_path), None)
         except BaseException as exc:  # noqa: BLE001 - surface all to UI
+            Logger.warning("MYCAL: sign-in failed: %r", exc)
             deliver(None, exc)
 
     threading.Thread(target=worker, daemon=True).start()

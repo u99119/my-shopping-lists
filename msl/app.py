@@ -56,6 +56,7 @@ class ShoppingListsApp(MDApp):
             self.manager.add_widget(screen)
         self.manager.current = "lock" if self.lock_enabled() else "home"
         Window.bind(on_keyboard=self._on_key)
+        services.bind_incoming_links()  # Google sign-in redirect (MY CAL)
         return self._with_system_bar_padding()
 
     # ------------------------------------------------------------ system bars
