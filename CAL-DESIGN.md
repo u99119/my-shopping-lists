@@ -151,6 +151,9 @@ OAuth flow from local-server redirect to an Android-friendly custom-tab flow.
 
 - Should we move to Published OAuth to avoid 7-day token expiry? Deferred (verification is heavy for personal app)
 - Per-phrase duration override UI (CLI supports via config; UI pending Phase 2)
+- **Next (parked): multiple target calendars.** Push to more than one person's Google calendar
+  (today: a single `calendar_id`). Design open: list of named targets in config, target picker on
+  MY CAL / push options, per-target "today" view, whether phrases are shared or per target.
 
 ## 12. Test Coverage
 
